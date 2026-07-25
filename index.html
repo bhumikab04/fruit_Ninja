@@ -96,10 +96,19 @@ let spawnInterval = 1100;
 let fruits = [];
 let particles = [];
 let popups = [];
+let missStreak = 0; // consecutive fruits missed without a slice in between
 let trails = [[], []]; // recent fingertip points per hand: {x,y,t}
 let lastFrameTime = performance.now();
 
 const GRAVITY = 0.32;
+
+// fun word banks shown as bold, large on-screen text
+const SLICE_COMMENTS = ['Nice!', 'Sliced!', 'Sweet cut!', 'Smooth!', 'Sharp!', 'Boom!', 'Clean hit!'];
+const MISS_COMMENTS = ["Stay focused!", "You've got this!", "Keep your eyes up!", "Don't give up!", "Shake it off!"];
+const SCORE_COMMENTS = ['Awesome!', "You're on fire!", 'Incredible!', 'Fantastic!', 'Unstoppable!', 'Amazing streak!'];
+
+function randomFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
 const FRUIT_TYPES = [
   {emoji:'🍉', color:'#4fd67a', r:46},
   {emoji:'🍎', color:'#ff5c5c', r:36},
@@ -111,7 +120,7 @@ const FRUIT_TYPES = [
 const BOMB = {emoji:'💣', color:'#333', r:38};
 
 function resetGame(){
-  score = 0; combo = 0; comboTimer = 0;
+  score = 0; combo = 0; comboTimer = 0; missStreak = 0;
   fruits = []; particles = []; popups = []; trails = [[], []];
   spawnInterval = 1100;
   updateHud();
@@ -151,8 +160,13 @@ function spawnParticles(x,y,color,count=14){
   }
 }
 
-function spawnPopup(x,y,text,color){
-  popups.push({x,y,text,color,life:1});
+function spawnPopup(x,y,text,color,options={}){
+  popups.push({
+    x, y, text, color, life:1,
+    decay: options.decay ?? 0.02,
+    fontSize: options.fontSize ?? 26,
+    centered: options.centered ?? false
+  });
 }
 
 function gameOver(){
@@ -199,15 +213,24 @@ function checkSlices(trail){
       f.sliced = true;
       spawnParticles(f.x, f.y, f.color, f.isBomb ? 24 : 14);
       if(f.isBomb){
-        spawnPopup(f.x, f.y, 'BOOM', '#ff5c5c');
+        spawnPopup(f.x, f.y, 'BOOM', '#ff5c5c', {fontSize:34});
         gameOver();
         return;
       } else {
+        missStreak = 0; // a successful slice breaks any miss streak
         combo++;
         comboTimer = 900;
         const pts = 10 * Math.max(combo,1);
+        const prevScore = score;
         score += pts;
-        spawnPopup(f.x, f.y, `+${pts}`, f.color);
+        // score number popup right at the cut
+        spawnPopup(f.x, f.y, `+${pts}`, f.color, {fontSize:38});
+        // a fun reaction word for every single slice, bold and large
+        spawnPopup(f.x, f.y - 58, randomFrom(SLICE_COMMENTS), '#ffffff', {fontSize:32, decay:0.018});
+        // celebrate every 100-point milestone with a big centered message
+        if(Math.floor(score/100) > Math.floor(prevScore/100)){
+          spawnPopup(canvas.width/2, canvas.height*0.32, randomFrom(SCORE_COMMENTS), '#feca57', {fontSize:52, decay:0.01, centered:true});
+        }
         updateHud();
       }
     }
@@ -300,6 +323,12 @@ function gameLoop(now){
       f.rotation += f.vr;
 
       if(f.y - f.r > canvas.height + 40){
+        if(!f.isBomb){
+          missStreak++;
+          if(missStreak > 3){
+            spawnPopup(canvas.width/2, canvas.height*0.4, randomFrom(MISS_COMMENTS), '#ff9f43', {fontSize:44, decay:0.011, centered:true});
+          }
+        }
         fruits.splice(i,1);
         continue;
       }
@@ -334,13 +363,19 @@ function gameLoop(now){
   // popups
   for(let i = popups.length - 1; i >= 0; i--){
     const p = popups[i];
-    p.y -= 1.2;
-    p.life -= 0.02;
+    p.y -= p.centered ? 0.4 : 1.2;
+    p.life -= p.decay;
     if(p.life <= 0){ popups.splice(i,1); continue; }
     ctx.globalAlpha = Math.max(p.life,0);
-    ctx.fillStyle = p.color;
-    ctx.font = 'bold 26px Segoe UI, Arial';
+    ctx.font = `800 ${p.fontSize}px Segoe UI, Arial`;
     ctx.textAlign = 'center';
+    if(p.centered){
+      // outline so big center-screen messages stay readable over gameplay
+      ctx.lineWidth = Math.max(4, p.fontSize*0.08);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(p.text, p.x, p.y);
+    }
+    ctx.fillStyle = p.color;
     ctx.fillText(p.text, p.x, p.y);
     ctx.globalAlpha = 1;
   }
