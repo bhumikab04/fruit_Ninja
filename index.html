@@ -276,8 +276,8 @@ function checkSlices(trail){
         // beat your all-time best this game? level up the difficulty, once per game
         if(hasPlayedGameBefore && !recordBrokenThisGame && score > bestScore){
           recordBrokenThisGame = true;
-          speedMultiplierTarget = 1.6;
-          bombChanceTarget = 0.28;
+          speedMultiplierTarget = 1.2;
+          bombChanceTarget = 0.18;
           spawnPopup(canvas.width/2, canvas.height*0.5, 'NEW HIGH SCORE! Level Up!', '#feca57', {fontSize:50, decay:0.008, centered:true});
         }
         updateHud();
