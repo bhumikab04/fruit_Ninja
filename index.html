@@ -113,6 +113,7 @@ let fruits = [];
 let particles = [];
 let popups = [];
 let rings = []; // expanding shockwave rings drawn on every slice
+let splats = []; // big soft juice-splat burst drawn on every slice
 let missStreak = 0; // consecutive fruits missed without a slice in between
 let trails = [[], []]; // recent fingertip points per hand: {x,y,t}
 let lastFrameTime = performance.now();
@@ -129,7 +130,7 @@ let bombChance = 0.12, bombChanceTarget = 0.12;
 const GRAVITY = 0.32;
 
 // fun word banks shown as bold, large on-screen text
-const SLICE_COMMENTS = ['Nice!', 'Sliced!', 'Sweet cut!', 'Smooth!', 'Sharp!', 'Boom!', 'Clean hit!'];
+const SLICE_COMMENTS = ['OMG!', 'Juicy!', 'Delicious!', 'So fresh!', 'Sweet!', 'You got this!'];
 const MISS_COMMENTS = ["Stay focused!", "You've got this!", "Keep your eyes up!", "Don't give up!", "Shake it off!"];
 const SCORE_COMMENTS = ['Awesome!', "You're on fire!", 'Incredible!', 'Fantastic!', 'Unstoppable!', 'Amazing streak!'];
 
@@ -272,19 +273,19 @@ function speak(text){
 }
 
 const FRUIT_TYPES = [
-  {emoji:'🍉', color:'#4fd67a', r:64},
-  {emoji:'🍎', color:'#ff5c5c', r:52},
-  {emoji:'🍊', color:'#ff9f43', r:52},
-  {emoji:'🍇', color:'#9b6bff', r:52},
-  {emoji:'🍋', color:'#f6e05e', r:48},
-  {emoji:'🥝', color:'#8bc34a', r:46},
+  {emoji:'🍉', color:'#4fd67a', r:74},
+  {emoji:'🍎', color:'#ff5c5c', r:60},
+  {emoji:'🍊', color:'#ff9f43', r:60},
+  {emoji:'🍇', color:'#9b6bff', r:60},
+  {emoji:'🍋', color:'#f6e05e', r:56},
+  {emoji:'🥝', color:'#8bc34a', r:54},
 ];
-const BOMB = {emoji:'💣', color:'#333', r:54};
+const BOMB = {emoji:'💣', color:'#333', r:60};
 
 function resetGame(){
   score = 0; lives = LIVES_START; combo = 0; comboTimer = 0; missStreak = 0;
   fruits = []; particles = []; popups = []; trails = [[], []];
-  rings = [];
+  rings = []; splats = [];
   spawnInterval = 1100;
   recordBrokenThisGame = false;
   speedMultiplier = 1; speedMultiplierTarget = 1;
@@ -316,28 +317,33 @@ function spawnFruit(){
   });
 }
 
-function spawnParticles(x,y,color,count=22){
+function spawnParticles(x,y,color,count=38){
   for(let i=0;i<count;i++){
     const angle = Math.random()*Math.PI*2;
-    const speed = 2.5 + Math.random()*6;
-    particles.push({
-      x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed - 2,
-      life:1, decay: 0.018 + Math.random()*0.02, color, size: 2+Math.random()*5
-    });
-  }
-  // a few bright white sparkles mixed in for extra sparkle/pop
-  for(let i=0;i<8;i++){
-    const angle = Math.random()*Math.PI*2;
-    const speed = 3 + Math.random()*5;
+    const speed = 4 + Math.random()*9;
     particles.push({
       x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed - 3,
-      life:1, decay: 0.03, color:'#ffffff', size: 1.5+Math.random()*2.5
+      life:1, decay: 0.014 + Math.random()*0.016, color, size: 3+Math.random()*8
+    });
+  }
+  // bright white sparkles mixed in for extra pop
+  for(let i=0;i<12;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 4 + Math.random()*6;
+    particles.push({
+      x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed - 4,
+      life:1, decay: 0.025, color:'#ffffff', size: 2+Math.random()*3
     });
   }
 }
 
+function spawnSplat(x,y,color,radius){
+  splats.push({x, y, radius:0, maxRadius:radius, alpha:0.55, color});
+}
+
 function spawnRing(x,y,color){
-  rings.push({x, y, radius:14, alpha:0.85, color});
+  rings.push({x, y, radius:14, alpha:0.9, color});
+  rings.push({x, y, radius:6, alpha:0.7, color}); // a second, tighter ring for extra impact
 }
 
 function spawnPopup(x,y,text,color,options={}){
@@ -405,7 +411,7 @@ function checkSlices(trail){
     const d = pointSegmentDistance(f.x, f.y, a.x, a.y, b.x, b.y);
     if(d < f.r){
       f.sliced = true;
-      spawnParticles(f.x, f.y, f.color, f.isBomb ? 34 : 22);
+      spawnParticles(f.x, f.y, f.color, f.isBomb ? 50 : 38);
       if(f.isBomb){
         spawnPopup(f.x, f.y, 'BOOM', '#ff5c5c', {fontSize:34});
         playFailSound();
@@ -413,6 +419,7 @@ function checkSlices(trail){
         return;
       } else {
         spawnRing(f.x, f.y, f.color);
+        spawnSplat(f.x, f.y, f.color, f.r * 1.8);
         missStreak = 0; // a successful slice breaks any miss streak
         combo++;
         comboTimer = 900;
@@ -566,17 +573,40 @@ function gameLoop(now){
     }
   }
 
-  // particles
+  // particles (drawn as stretched droplets for a juicier, liquid splash look)
   for(let i = particles.length - 1; i >= 0; i--){
     const p = particles[i];
     p.vy += GRAVITY*0.5;
     p.x += p.vx; p.y += p.vy;
     p.life -= p.decay;
     if(p.life <= 0){ particles.splice(i,1); continue; }
+    const speed = Math.hypot(p.vx, p.vy);
+    ctx.save();
     ctx.globalAlpha = Math.max(p.life,0);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(Math.atan2(p.vy, p.vx));
+    ctx.scale(1 + Math.min(speed*0.06, 1.4), 1);
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.arc(0, 0, p.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // big soft juice splat burst
+  for(let i = splats.length - 1; i >= 0; i--){
+    const s = splats[i];
+    s.radius += (s.maxRadius - s.radius) * 0.35;
+    s.alpha -= 0.045;
+    if(s.alpha <= 0){ splats.splice(i,1); continue; }
+    const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius);
+    grad.addColorStop(0, s.color);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = Math.max(s.alpha,0);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
