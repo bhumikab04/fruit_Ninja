@@ -46,6 +46,13 @@
   }
   #overlay p{max-width:460px;line-height:1.55;opacity:.85;font-size:15px;margin:0;}
   #overlay .final{font-size:20px;margin-top:6px;opacity:1;color:var(--gold);font-weight:700;}
+  #nameInput{
+    margin-top:22px;padding:12px 18px;font-size:16px;border-radius:999px;
+    border:1.5px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.08);
+    color:#fff;text-align:center;width:240px;max-width:80vw;outline:none;
+  }
+  #nameInput::placeholder{color:rgba(255,255,255,0.55);}
+  #nameInput:focus{border-color:var(--gold);}
   button{
     margin-top:26px;padding:15px 34px;font-size:17px;border:none;border-radius:999px;
     background:linear-gradient(90deg,var(--coral),var(--gold));color:#1a1305;font-weight:800;
@@ -63,7 +70,7 @@
 <canvas id="gameCanvas"></canvas>
 
 <div id="hud" class="hidden">
-  <div class="score">Score: <span id="scoreVal">0</span></div>
+  <div class="score"><span id="playerNameEl"></span> Score: <span id="scoreVal">0</span></div>
   <div class="combo" id="comboText"></div>
   <div class="lives" id="livesEl"></div>
 </div>
@@ -75,6 +82,7 @@
 <div id="overlay">
   <h1>Gesture Fruit Slicer</h1>
   <p id="overlayText">Point your webcam at yourself, then slice the flying fruit with your index fingertip — just like swiping a blade. You've got 5 lives — missed fruit costs one, a bomb ends it instantly. Beat your best score and things get harder!</p>
+  <input id="nameInput" type="text" placeholder="Enter your name" maxlength="16">
   <button id="startBtn">Allow Camera &amp; Start</button>
 </div>
 
@@ -95,6 +103,9 @@ const comboText = document.getElementById('comboText');
 const livesEl = document.getElementById('livesEl');
 const endBtn = document.getElementById('endBtn');
 const statusEl = document.getElementById('status');
+const nameInput = document.getElementById('nameInput');
+const playerNameEl = document.getElementById('playerNameEl');
+let playerName = 'Player';
 
 function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 resize();
@@ -122,6 +133,7 @@ let lastFrameTime = performance.now();
 let bestScore = 0;
 let hasPlayedGameBefore = false; // guards against leveling up on your very first-ever game
 let recordBrokenThisGame = false;
+let encouraged30 = false; // fires the "You got this, name!" line once per game at 30 points
 
 // difficulty ramps smoothly toward these targets once you beat your best score
 let speedMultiplier = 1, speedMultiplierTarget = 1;
@@ -288,6 +300,7 @@ function resetGame(){
   rings = []; splats = [];
   spawnInterval = 1100;
   recordBrokenThisGame = false;
+  encouraged30 = false;
   speedMultiplier = 1; speedMultiplierTarget = 1;
   bombChance = 0.12; bombChanceTarget = 0.12;
   updateHud();
@@ -295,6 +308,7 @@ function resetGame(){
 
 function updateHud(){
   scoreVal.textContent = score;
+  playerNameEl.textContent = playerName;
   comboText.textContent = combo > 1 ? `x${combo} combo!` : '';
   livesEl.textContent = '❤️'.repeat(Math.max(lives,0)) + '🖤'.repeat(Math.max(LIVES_START-lives,0));
 }
@@ -432,6 +446,11 @@ function checkSlices(trail){
         const reaction = randomFrom(SLICE_COMMENTS);
         spawnPopup(f.x, f.y - 58, reaction, '#ffffff', {fontSize:32, decay:0.018});
         speak(reaction);
+        // a personal shout-out the first time you cross 30 points
+        if(!encouraged30 && score >= 30){
+          encouraged30 = true;
+          speak(`You got this, ${playerName}!`);
+        }
         // celebrate every 100-point milestone with a big centered message
         if(Math.floor(score/100) > Math.floor(prevScore/100)){
           const praise = randomFrom(SCORE_COMMENTS);
@@ -489,6 +508,7 @@ function onHandResults(results){
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   startBtn.textContent = 'Starting camera...';
+  playerName = nameInput.value.trim() || 'Player';
   startBackgroundMusic();
   try{
     if(!camera){
